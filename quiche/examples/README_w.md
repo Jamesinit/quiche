@@ -17,3 +17,9 @@ thread 'main' panicked at 'called `Result::unwrap()` on an `Err` value: TlsFail'
 
 原因是因为，你当前的目录并不在与example同级别路径，但是代码中需要读取`exapmle/cert.crt`.
 切换到与example同级别的路径中即可。
+
+## Cargo run 时注意 增加feature
+
+`cargo run --features dtp,ffi --example server`
+
+feature要加在前面，加在example之后不管用
