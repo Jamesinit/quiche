@@ -204,8 +204,8 @@ impl Recovery {
 
             in_flight_count: [0; packet::EPOCH_COUNT],
 
-            congestion_window: config.max_send_udp_payload_size *
-                INITIAL_WINDOW_PACKETS,
+            congestion_window: config.max_send_udp_payload_size
+                * INITIAL_WINDOW_PACKETS,
 
             pkt_thresh: INITIAL_PACKET_THRESHOLD,
 
@@ -243,8 +243,8 @@ impl Recovery {
 
             prr: prr::PRR::default(),
 
-            send_quantum: config.max_send_udp_payload_size *
-                INITIAL_WINDOW_PACKETS,
+            send_quantum: config.max_send_udp_payload_size
+                * INITIAL_WINDOW_PACKETS,
 
             #[cfg(feature = "qlog")]
             qlog_metrics: QlogMetrics::default(),
@@ -289,9 +289,9 @@ impl Recovery {
         }
 
         // HyStart++: Start of the round in a slow start.
-        if self.hystart.enabled() &&
-            epoch == packet::EPOCH_APPLICATION &&
-            self.congestion_window < self.ssthresh
+        if self.hystart.enabled()
+            && epoch == packet::EPOCH_APPLICATION
+            && self.congestion_window < self.ssthresh
         {
             self.hystart.start_round(pkt_num);
         }
@@ -299,8 +299,8 @@ impl Recovery {
         // Pacing: Set the pacing rate if CC doesn't do its own.
         if !(self.cc_ops.has_custom_pacing)() {
             if let Some(srtt) = self.smoothed_rtt {
-                let rate = PACING_MULTIPLIER * self.congestion_window as f64 /
-                    srtt.as_secs_f64();
+                let rate = PACING_MULTIPLIER * self.congestion_window as f64
+                    / srtt.as_secs_f64();
                 self.set_pacing_rate(rate as u64);
             }
         }
@@ -336,10 +336,10 @@ impl Recovery {
         //   * Packet epoch is not EPOCH_APPLICATION.
         //   * Packet contains only ACK frames.
         //   * The start of the connection.
-        if epoch != packet::EPOCH_APPLICATION ||
-            packet_size == 0 ||
-            self.bytes_sent <= self.congestion_window ||
-            self.pacing_rate == 0
+        if epoch != packet::EPOCH_APPLICATION
+            || packet_size == 0
+            || self.bytes_sent <= self.congestion_window
+            || self.pacing_rate == 0
         {
             self.last_packet_scheduled_time =
                 cmp::max(self.last_packet_scheduled_time, now);
@@ -422,8 +422,8 @@ impl Recovery {
 
                     // unacked.time_sent can be in the future due to
                     // pacing.
-                    if now.saturating_duration_since(unacked.time_sent) >
-                        loss_delay
+                    if now.saturating_duration_since(unacked.time_sent)
+                        > loss_delay
                     {
                         // TODO: do time threshold update
                         self.time_thresh = 5_f64 / 4_f64;
@@ -495,6 +495,18 @@ impl Recovery {
             };
 
             self.update_rtt(latest_rtt, ack_delay, now);
+
+            //fix pacing rate calculate panic error,by wzx.
+            //pacing rate need smoothed_rtt to calculate.
+            //smoothed_rtt init is None case defalt pacing rate is zero,
+            //then case panic when calculate real priority occur.
+            // smoothed_rtt update when recive ACK FRAM,so recalculate pacing rate with latest smoothed_rtt.
+            #[cfg(feature = "dtp")]
+            if let Some(srtt) = self.smoothed_rtt {
+                let rate = PACING_MULTIPLIER * self.congestion_window as f64
+                    / srtt.as_secs_f64();
+                self.set_pacing_rate(rate as u64);
+            }
         }
 
         // Detect and mark lost packets without removing them from the sent
@@ -615,8 +627,8 @@ impl Recovery {
         }
 
         // Open more space (snd_cnt) for PRR when allowed.
-        self.congestion_window.saturating_sub(self.bytes_in_flight) +
-            self.prr.snd_cnt
+        self.congestion_window.saturating_sub(self.bytes_in_flight)
+            + self.prr.snd_cnt
     }
 
     pub fn rtt(&self) -> Duration {
@@ -644,8 +656,8 @@ impl Recovery {
             cmp::min(self.max_datagram_size, new_max_datagram_size);
 
         // Congestion Window is updated only when it's not updated already.
-        if self.congestion_window ==
-            self.max_datagram_size * INITIAL_WINDOW_PACKETS
+        if self.congestion_window
+            == self.max_datagram_size * INITIAL_WINDOW_PACKETS
         {
             self.congestion_window = max_datagram_size * INITIAL_WINDOW_PACKETS;
         }
@@ -681,8 +693,8 @@ impl Recovery {
                     latest_rtt
                 };
 
-                self.rttvar = self.rttvar.mul_f64(3.0 / 4.0) +
-                    sub_abs(srtt, adjusted_rtt).mul_f64(1.0 / 4.0);
+                self.rttvar = self.rttvar.mul_f64(3.0 / 4.0)
+                    + sub_abs(srtt, adjusted_rtt).mul_f64(1.0 / 4.0);
 
                 self.smoothed_rtt = Some(
                     srtt.mul_f64(7.0 / 8.0) + adjusted_rtt.mul_f64(1.0 / 8.0),
@@ -803,8 +815,8 @@ impl Recovery {
 
         for unacked in unacked_iter {
             // Mark packet as lost, or set time when it should be marked.
-            if unacked.time_sent <= lost_send_time ||
-                largest_acked >= unacked.pkt_num + self.pkt_thresh
+            if unacked.time_sent <= lost_send_time
+                || largest_acked >= unacked.pkt_num + self.pkt_thresh
             {
                 self.lost[epoch].append(&mut unacked.frames);
 
@@ -833,8 +845,9 @@ impl Recovery {
                 let loss_time = match self.loss_time[epoch] {
                     None => unacked.time_sent + loss_delay,
 
-                    Some(loss_time) =>
-                        cmp::min(loss_time, unacked.time_sent + loss_delay),
+                    Some(loss_time) => {
+                        cmp::min(loss_time, unacked.time_sent + loss_delay)
+                    },
                 };
 
                 self.loss_time[epoch] = Some(loss_time);
@@ -898,8 +911,9 @@ impl Recovery {
 
     fn in_congestion_recovery(&self, sent_time: Instant) -> bool {
         match self.congestion_recovery_start_time {
-            Some(congestion_recovery_start_time) =>
-                sent_time <= congestion_recovery_start_time,
+            Some(congestion_recovery_start_time) => {
+                sent_time <= congestion_recovery_start_time
+            },
 
             None => false,
         }
@@ -980,7 +994,7 @@ impl Recovery {
 #[repr(C)]
 pub enum CongestionControlAlgorithm {
     /// Reno congestion control algorithm. `reno` in a string form.
-    Reno  = 0,
+    Reno = 0,
     /// CUBIC congestion control algorithm (default). `cubic` in a string form.
     CUBIC = 1,
 }
